@@ -394,7 +394,7 @@ function renderPart(cid,pid){
   var pi=cap.partidas.findIndex(function(x){return x.id===pid;})+1;
   var isOpen=el.classList.contains('open');
 
-  var matsH=p.materiales.length?'<table class="mat-t"><thead><tr><th>Descripci\u00f3n</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">Coste/ud</th><th style="text-align:right;">PVP/ud</th><th style="text-align:right;">Subtotal</th><th></th></tr></thead><tbody>'+p.materiales.map(function(m,mi){return '<tr><td>'+esc(m.desc)+'</td><td style="text-align:center;">'+m.qty+' '+m.unit+'</td><td style="text-align:right;color:var(--grey2);">'+(m.coste||0).toFixed(2)+' \u20ac</td><td style="text-align:right;color:var(--yellow);">'+(m.pvp||0).toFixed(2)+' \u20ac</td><td style="text-align:right;color:var(--green);font-weight:600;">'+((m.qty||0)*(m.pvp||0)).toFixed(2)+' \u20ac</td><td><button class="btn btn-rd btn-sm" style="padding:2px 6px;" onclick="removeMat('+cid+','+pid+','+mi+')">\u2715</button></td></tr>';}).join('')+'</tbody></table>':'<p style="color:var(--grey2);font-size:12px;padding:6px 0;">Sin materiales. A\u00f1ade abajo.</p>';
+  var matsH=p.materiales.length?'<table class="mat-t"><thead><tr><th>Descripci\u00f3n</th><th style="text-align:center;">Cant.</th><th style="text-align:right;">Coste/ud</th><th style="text-align:right;">PVP/ud</th><th style="text-align:right;">Subtotal</th><th></th></tr></thead><tbody>'+p.materiales.map(function(m,mi){return '<tr id="mrow-'+cid+'-'+pid+'-'+mi+'"><td>'+esc(m.desc)+'</td><td style="text-align:center;">'+m.qty+' '+m.unit+'</td><td style="text-align:right;color:var(--grey2);">'+(m.coste||0).toFixed(2)+' \u20ac</td><td style="text-align:right;color:var(--yellow);">'+(m.pvp||0).toFixed(2)+' \u20ac</td><td style="text-align:right;color:var(--green);font-weight:600;">'+((m.qty||0)*(m.pvp||0)).toFixed(2)+' \u20ac</td><td><button class="btn btn-gr btn-sm" style="padding:2px 5px;margin-right:3px;" onclick="editMat('+cid+','+pid+','+mi+')">&#9999;</button><button class="btn btn-rd btn-sm" style="padding:2px 6px;" onclick="removeMat('+cid+','+pid+','+mi+')">\u2715</button></td></tr>';}).join('')+'</tbody></table>':'<p style="color:var(--grey2);font-size:12px;padding:6px 0;">Sin materiales. A\u00f1ade abajo.</p>';
 
   var unitOpts=['pa','ud','m','ml','m\u00b2','h','lote'].map(function(u){return '<option'+(u===p.unit?' selected':'')+'>'+u+'</option>';}).join('');
 
@@ -459,6 +459,53 @@ function addMat(cid,pid){
   renderPart(cid,pid);capTotal(cid);calcTot();toast('Material a\u00f1adido');
 }
 function removeMat(cid,pid,mi){var cap=caps.find(function(c){return c.id===cid;});if(!cap)return;var p=cap.partidas.find(function(x){return x.id===pid;});if(!p)return;p.materiales.splice(mi,1);renderPart(cid,pid);capTotal(cid);calcTot();}
+
+function editMat(cid,pid,mi){
+  var cap=caps.find(function(c){return c.id===cid;});if(!cap)return;
+  var p=cap.partidas.find(function(x){return x.id===pid;});if(!p)return;
+  var m=p.materiales[mi];if(!m)return;
+  var row=document.getElementById('mrow-'+cid+'-'+pid+'-'+mi);if(!row)return;
+  // Reemplazar la fila con inputs editables
+  row.innerHTML='<td colspan="5" style="padding:6px 4px;">'
+    +'<div style="display:grid;grid-template-columns:2.5fr 65px 60px 85px 75px 75px auto;gap:6px;align-items:center;">'
+      +'<input id="ed-desc-'+mi+'" value="'+esc(m.desc)+'" style="font-size:12px;padding:5px 8px;">'
+      +'<input id="ed-qty-'+mi+'" type="number" value="'+m.qty+'" step="0.01" min="0.01" style="font-size:12px;padding:5px 4px;text-align:center;">'
+      +'<select id="ed-unit-'+mi+'" style="font-size:11px;padding:5px 2px;">'+['ud','m','ml','m²','h','kg','lote'].map(function(u){return'<option'+(u===m.unit?' selected':'')+'>'+u+'</option>';}).join('')+'</select>'
+      +'<input id="ed-coste-'+mi+'" type="number" value="'+(m.coste||0).toFixed(2)+'" step="0.01" min="0" style="font-size:12px;padding:5px 4px;text-align:right;" oninput="edRcPVP('+mi+')">'
+      +'<input id="ed-mgn-'+mi+'" type="number" value="'+(m.coste>0?(((m.pvp-m.coste)/m.coste)*100).toFixed(1):0)+'" step="1" style="font-size:12px;padding:5px 4px;text-align:right;border-color:rgba(0,229,160,.3);" oninput="edRcPVP('+mi+')" placeholder="Mgn%">'
+      +'<input id="ed-pvp-'+mi+'" type="number" value="'+(m.pvp||0).toFixed(2)+'" step="0.01" min="0" style="font-size:12px;padding:5px 4px;text-align:right;" oninput="edRcMgn('+mi+')">'
+      +'<button class="btn btn-cy btn-sm" onclick="saveMat('+cid+','+pid+','+mi+')" style="padding:5px 8px;">✓</button>'
+    +'</div>'
+  +'</td>';
+}
+
+function edRcPVP(mi){
+  var c=parseFloat(document.getElementById('ed-coste-'+mi)&&document.getElementById('ed-coste-'+mi).value)||0;
+  var mg=parseFloat(document.getElementById('ed-mgn-'+mi)&&document.getElementById('ed-mgn-'+mi).value)||0;
+  var v=document.getElementById('ed-pvp-'+mi);
+  if(v&&c>0)v.value=(c*(1+mg/100)).toFixed(2);
+}
+function edRcMgn(mi){
+  var c=parseFloat(document.getElementById('ed-coste-'+mi)&&document.getElementById('ed-coste-'+mi).value)||0;
+  var v=parseFloat(document.getElementById('ed-pvp-'+mi)&&document.getElementById('ed-pvp-'+mi).value)||0;
+  var mg=document.getElementById('ed-mgn-'+mi);
+  if(mg&&c>0)mg.value=(((v-c)/c)*100).toFixed(1);
+}
+
+function saveMat(cid,pid,mi){
+  var cap=caps.find(function(c){return c.id===cid;});if(!cap)return;
+  var p=cap.partidas.find(function(x){return x.id===pid;});if(!p)return;
+  var desc=document.getElementById('ed-desc-'+mi)&&document.getElementById('ed-desc-'+mi).value.trim();
+  if(!desc)return;
+  p.materiales[mi]={
+    desc:desc,
+    qty:parseFloat(document.getElementById('ed-qty-'+mi)&&document.getElementById('ed-qty-'+mi).value)||1,
+    unit:document.getElementById('ed-unit-'+mi)&&document.getElementById('ed-unit-'+mi).value||'ud',
+    coste:parseFloat(document.getElementById('ed-coste-'+mi)&&document.getElementById('ed-coste-'+mi).value)||0,
+    pvp:parseFloat(document.getElementById('ed-pvp-'+mi)&&document.getElementById('ed-pvp-'+mi).value)||0
+  };
+  renderPart(cid,pid);capTotal(cid);calcTot();toast('Material actualizado');
+}
 function rcPVP(pid){var c=parseFloat(document.getElementById('nc-'+pid)&&document.getElementById('nc-'+pid).value)||0,m=parseFloat(document.getElementById('nm-'+pid)&&document.getElementById('nm-'+pid).value)||0,v=document.getElementById('nv-'+pid);if(v&&c>0)v.value=(c*(1+m/100)).toFixed(2);}
 function rcMgn(pid){var c=parseFloat(document.getElementById('nc-'+pid)&&document.getElementById('nc-'+pid).value)||0,v=parseFloat(document.getElementById('nv-'+pid)&&document.getElementById('nv-'+pid).value)||0,m=document.getElementById('nm-'+pid);if(m&&c>0)m.value=(((v-c)/c)*100).toFixed(1);}
 function sugBD(pid,val){
